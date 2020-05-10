@@ -18,20 +18,7 @@ func init() {
 	log.Printf("os: %v, arch: %v\n", runtime.GOOS, runtime.GOARCH)
 }
 
-// GoVersion JSON structure for a go version
-type GoVersion struct {
-	Version *string `json:"version"`
-	Stable  *bool   `json:"stable"`
-	Files   []struct {
-		Filename *string `json:"filename"`
-		OS       *string `json:"os"`
-		Arch     *string `json:"arch"`
-		Version  *string `json:"version"`
-		Sha256   *string `json:"sha256"`
-		Size     *int    `json:"size"`
-		Kind     *string `json:"kind"`
-	} `json:"files"`
-}
+//go:generate sh -c "curl -s https://golang.org/dl/?mode=json | gojson -name GoVersion -o goversion.go"
 
 func hadAnError(err error) {
 	log.Printf("ERROR: %v\n", err)
@@ -59,7 +46,7 @@ func main() {
 	log.Println("Response body:", string(responseBodyBytes))
 
 	// Parse/decode the json response into our data structure (an array of go versions)
-	var data []GoVersion
+	var data GoVersion
 	err = json.NewDecoder(bytes.NewBuffer(responseBodyBytes)).Decode(&data)
 	if err != nil {
 		hadAnError(fmt.Errorf("Problem parsing metadata: %w", err))
@@ -68,12 +55,12 @@ func main() {
 
 	// Print out the versions found
 	for _, version := range data {
-		if version.Version != nil {
-			log.Println(*version.Version)
+		if len(version.Version) > 0 {
+			log.Println(version.Version)
 			// For each version print out the files
 			for _, file := range version.Files {
-				if file.Filename != nil {
-					log.Printf("  %v (%v)\n", *file.Filename, *file.Size)
+				if len(file.Filename) > 0 {
+					log.Printf("  %v (%v)\n", file.Filename, file.Size)
 				}
 			}
 		}
@@ -88,7 +75,7 @@ func main() {
 	}
 }
 
-func findLatestVersion(data []GoVersion) (string, string) {
+func findLatestVersion(data GoVersion) (string, string) {
 	latestVersion := ""
 	latestFilename := ""
 	os := runtime.GOOS
@@ -96,16 +83,16 @@ func findLatestVersion(data []GoVersion) (string, string) {
 	// Iterate over the versions
 	for _, version := range data {
 		// Check version is set
-		if version.Version != nil {
+		if len(version.Version) > 0 {
 			// If 'latest' is not yet set or if this version is higher (later)
-			if len(latestVersion) == 0 || *version.Version > latestVersion {
+			if len(latestVersion) == 0 || version.Version > latestVersion {
 				// Iterate through the files looking for those of type 'archive' that match our os/arch
 				for _, file := range version.Files {
-					if file.Kind != nil && *file.Kind == "archive" {
-						if file.OS != nil && *file.OS == os && file.Arch != nil && *file.Arch == arch {
+					if len(file.Kind) > 0 && file.Kind == "archive" {
+						if len(file.Os) > 0 && file.Os == os && len(file.Arch) > 0 && file.Arch == arch {
 							// Match is found so set as latest
-							latestVersion = *version.Version
-							latestFilename = *file.Filename
+							latestVersion = version.Version
+							latestFilename = file.Filename
 						}
 					}
 				}
